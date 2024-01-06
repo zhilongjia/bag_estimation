@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from sklearn.model_selection import KFold
 from utils.datasets import NewDataset, get_transform, TestDataset
-from model.brainAgeEstimator2 import BrainAgeEstimator
+from model.VGGNet3D import VGGNet3D
 from utils.load_data import load_data_ukb
 from utils.logger import Logger
 from utils.utlis import seed_everything, mkdir_if_needed
@@ -26,43 +26,50 @@ def main(args):
 
     cwd = os.getcwd()
 
-    sys.stdout = Logger(filename=os.path.join(cwd, 'logs', 'train_vit.log'))
+    sys.stdout = Logger(filename=os.path.join(cwd, 'train_vgg.log'))
 
     data_path = os.path.join(cwd, 'data')
     image_path = os.path.join(data_path, 'npy_data')
-    save_path = os.path.join(cwd, 'saved_models', 'vit')
-    res_path = os.path.join(cwd, 'results', 'vit')
+    save_path = os.path.join(cwd, 'saved_models', 'vgg')
+    res_path = os.path.join(cwd, 'results', 'vgg')
 
-    mkdir_if_needed(res_path)
     mkdir_if_needed(save_path)
+    mkdir_if_needed(res_path)
 
     # load data
     img, x, y = load_data_ukb(data_path, train=True)
 
     print(f'{len(img)} for training.')
 
-    x_dim = x.shape[1]
-    channels, depth, img_size = 1, 128, (128, 128)
-    image_patch_size, depth_patch_size = 16, 16
-
-    kf = KFold(n_splits=5)
+    kf = KFold(n_splits=args.k_fold)
     tr_fold = 1
     for tr_idx, va_idx in kf.split(x):
+
         print('-' * 80 + f'training fold {tr_fold}' + '-' * 80)
-        train_set = NewDataset(img[tr_idx], y[tr_idx], image_path=image_path, img_type='npy')
-        va_set = NewDataset(img[va_idx], y[va_idx], image_path=image_path, img_type='npy')
+        train_set = NewDataset(img[tr_idx], y[tr_idx], image_path=image_path, img_type='npy', transform=None)
+        va_set = NewDataset(img[va_idx], y[va_idx], image_path=image_path, img_type='npy', transform=None)
         tr_loader = DataLoader(train_set, batch_size=args.bh_size, shuffle=False)
         va_loader = DataLoader(va_set, batch_size=args.bh_size, shuffle=False)
+
         print(f'{len(tr_loader.dataset)} for training, {len(va_loader.dataset)} for evaluation')
+        if os.path.exists(os.path.join(save_path, f'model_vit_fold{tr_fold}.pth')):
+            print('training complete...')
+            model = VGGNet3D(dropout_rate=args.dropout)
+            model = model.to(device)
+            if os.path.exists(os.path.join(res_path, f'pred_age_fold{tr_fold}.csv')):
+                print(f'fold {tr_fold} already evaluated, continue...')
+                tr_fold += 1
+                continue
+        else:
+            print('training start...')
+            model = VGGNet3D(dropout_rate=args.dropout)
 
-        model = BrainAgeEstimator(args, device, channels, img_size, image_patch_size,
-                                  depth, depth_patch_size, x_dim)
-        model = model.to(device)
+            model = model.to(device)
 
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+            optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-        train_and_evaluate(args, device, model, optimizer, tr_loader, va_loader, tr_fold=tr_fold,
-                           save_path=save_path, save_name=f'model_vit_fold{tr_fold}')
+            train_and_evaluate(args, device, model, optimizer, tr_loader, va_loader, tr_fold=tr_fold,
+                               save_path=save_path, save_name=f'model_vit_fold{tr_fold}')
 
         model.load_state_dict(torch.load(os.path.join(save_path, f'model_vit_fold{tr_fold}.pth')))
         # model.load_state_dict(state_dict)
@@ -84,22 +91,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--data_name', type=str, choices=['ADNI', 'UKBiobank'], default="UKBiobank")
-    parser.add_argument('--dim', type=int, default=256)
-    parser.add_argument('--hidden_dim', type=int, default=256)
-    parser.add_argument('--dim_mlp', type=int, default=256)
-    parser.add_argument('--n_heads', type=int, default=6)
-    parser.add_argument('--dim_head', type=int, default=64)
-    parser.add_argument('--attn_layers', type=int, default=6)
-
-    parser.add_argument('--hidden_dim_encoder', type=int, default=256)
-    parser.add_argument('--encoder_layers', type=int, default=2)
-
-    parser.add_argument('--pooling', type=str,
-                        choices=['sum', 'mean'],
-                        default='sum')
-
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=2e-5)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--emb_dropout', type=float, default=0.)
@@ -107,9 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--repeat', type=int, default=1)
     parser.add_argument('--k_fold', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--bh_size', type=int, default=16)
-
-    parser.add_argument('--pretrain', type=bool, default=False)
+    parser.add_argument('--bh_size', type=int, default=8)
 
     parser.add_argument('--seed', type=int, default=1234)
 
