@@ -44,6 +44,10 @@ class NewDataset(Dataset):
         self.image_path = image_path
         self.image_type = img_type
         self.image_suffix = image_suffix if image_suffix is not None else ''
+        if self.image_type == 'npy':
+            # assert npy data has been transformed
+            assert self.transform is None or self.transform is False, \
+                'npy data has been transformed, please set transform to None or False'
 
     def __getitem__(self, index):
         if self.image_type == 'npy':
@@ -64,7 +68,7 @@ class NewDataset(Dataset):
 
 # for testing
 class TestDataset(Dataset):
-    def __init__(self, img, y, image_path, img_type='nii', transform=None, image_suffix='_20252_0'):
+    def __init__(self, img, y, image_path, img_type='nii', transform=None, image_suffix='_20252_2_0'):
         self.img = img
         self.y = torch.from_numpy(y).float()
         self.len = y.shape[0]
@@ -169,8 +173,6 @@ def get_transform(image_type='nii', data_type='3d', norm='std', to_tensor=True):
         t.append(mo_trans.Resize(spatial_size=(128, 128, 128)))
     else:
         t.append(mo_trans.CenterSpatialCrop(roi_size=(182, 182)))
-
-
 
     if norm == 'maxmin':
         pass

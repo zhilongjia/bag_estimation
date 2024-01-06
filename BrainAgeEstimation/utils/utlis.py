@@ -47,7 +47,7 @@ def normalize_data(x, norm_mode='standard'):
 
 def mkdir_if_needed(folder: str):
     if not os.path.exists(folder):
-        os.makedirs(folder)
+        os.makedirs(folder, exist_ok=True)
 
 
 def to_device(device, *arrays):

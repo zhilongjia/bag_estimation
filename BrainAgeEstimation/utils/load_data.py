@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 
 
-def load_data_ukb(data_path, normalize=True, norm_mode='standard', train: bool = True, sex: int = -1):
+def load_data_ukb(data_path, normalize=True, norm_mode='standard',
+                  train: bool = True, healthy: int = 1, sex: int = -1):
     if train:
         df = pd.read_csv(os.path.join(data_path, 'csv', 'ukb_data_healthy_v2.csv'))
         df = df[df['usable'] == 1]
@@ -19,6 +20,13 @@ def load_data_ukb(data_path, normalize=True, norm_mode='standard', train: bool =
         # select healthy patients for training
         # df = df[df['is_healthy'] == 0]
         # pass
+
+    # select patients for evaluation
+    if healthy == 0:
+        df = pd.read_csv(os.path.join(data_path, 'csv', 'ukb_data_v2.csv'))
+        df = df[df['usable'] == 1]
+        df = df[df['is_healthy'] == 0]
+
     df['train'] = 1
 
     if sex != -1:
@@ -49,3 +57,12 @@ def load_external_data(dataset, data_path):
 
     return img, y
 
+
+if __name__ == '__main__':
+    cwd = os.getcwd()
+    data_path = os.path.join('E:\\OneDrive\\work\\BrainAge\\source_codes\\BrainAgeEstimation\\data')
+    print()
+
+    # load data
+    img, x, y = load_data_ukb(data_path, train=True)
+    print(x.shape[1])
